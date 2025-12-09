@@ -16,22 +16,43 @@ class NewsSummarizerApp:
         master.title("News Summarizer")
         master.geometry("600x450")
 
+        self.mode_var = tk.StringVar(value="input")  # "input" or "url"
         self.url_var = tk.StringVar()
         self.max_chars_var = tk.StringVar(value="500")
 
         self.create_widgets()
 
     def create_widgets(self):
-        url_frame = ttk.Frame(self.master, padding="10")
-        url_frame.pack(fill='x', padx=10, pady=5)
+        # mode selection (Input text / Url)
+        mode_frame = ttk.Frame(self.master, padding="8")
+        mode_frame.pack(fill='x', padx=10, pady=(10, 2))
+        ttk.Radiobutton(mode_frame, text="Input text", variable=self.mode_var, value="input",
+                        command=self.update_input_mode).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Radiobutton(mode_frame, text="Url", variable=self.mode_var, value="url",
+                        command=self.update_input_mode).pack(side=tk.LEFT)
 
-        ttk.Label(url_frame, text="Paste your url here:", anchor='w').pack(fill='x', pady=(0, 2))
-        url_entry = ttk.Entry(url_frame, textvariable=self.url_var)
-        url_entry.pack(fill='x', ipady=5)
+        # inputs container placed directly under mode_frame so shown fields stay there
+        self.inputs_container = ttk.Frame(self.master)
+        self.inputs_container.pack(fill='x', padx=10, pady=5)
 
+        # Input text frame (default visible) - child of inputs_container
+        self.input_frame = ttk.Frame(self.inputs_container, padding="10")
+        ttk.Label(self.input_frame, text="Input your text", anchor='w').pack(fill='x', pady=(0, 2))
+        self.input_text = tk.Text(self.input_frame, height=3, wrap='word')
+        self.input_text.pack(fill='x', ipady=3)
+
+        # Url frame (hidden by default) - child of inputs_container
+        self.url_frame = ttk.Frame(self.inputs_container, padding="10")
+        ttk.Label(self.url_frame, text="Paste your url here:", anchor='w').pack(fill='x', pady=(0, 2))
+        self.url_entry = ttk.Entry(self.url_frame, textvariable=self.url_var)
+        self.url_entry.pack(fill='x', ipady=5)
+
+        # pack only the active input frame initially inside inputs_container
+        self.input_frame.pack(fill='x')
+
+        # remaining UI (config, buttons, output) - reuse existing layout
         button_frame = ttk.Frame(self.master, padding="10")
         button_frame.pack(fill='x', padx=10, pady=5)
-
 
         config_frame = ttk.Frame(self.master, padding="10")
         config_frame.pack(fill='x', padx=10, pady=5)
@@ -55,13 +76,27 @@ class NewsSummarizerApp:
         self.output_text = tk.Text(output_frame, height=10, wrap='word')
         self.output_text.pack(fill='both', expand=True, ipady=5)
 
-    def generate_summary_action(self):
-        url = self.url_var.get().strip()
-        max_len_str = self.max_chars_var.get().strip()
+    def update_input_mode(self):
+        mode = self.mode_var.get()
+        # switch visible frames inside inputs_container so layout position is stable
+        if mode == "input":
+            try:
+                self.url_frame.pack_forget()
+            except Exception:
+                pass
+            if not self.input_frame.winfo_ismapped():
+                self.input_frame.pack(fill='x')
+        else:
+            try:
+                self.input_frame.pack_forget()
+            except Exception:
+                pass
+            if not self.url_frame.winfo_ismapped():
+                self.url_frame.pack(fill='x')
 
-        if not url:
-            messagebox.showerror("Błąd", "Proszę podać URL artykułu.")
-            return
+    def generate_summary_action(self):
+        mode = self.mode_var.get()
+        max_len_str = self.max_chars_var.get().strip()
 
         try:
             max_length = int(max_len_str)
@@ -72,12 +107,28 @@ class NewsSummarizerApp:
             messagebox.showerror("Błąd", "Maksymalna liczba znaków musi być liczbą całkowitą.")
             return
 
-        self.output_text.delete(1.0, tk.END)  # Czyść poprzedni wynik
+        self.output_text.delete(1.0, tk.END)
         self.output_text.insert(tk.END, "Trwa generowanie podsumowania... Proszę czekać.")
         self.master.update()
 
         try:
-            text = scrape_text_from_url(url)
+            if mode == "input":
+                text = self.input_text.get("1.0", tk.END).strip()
+                if not text:
+                    messagebox.showerror("Błąd", "Proszę wprowadzić tekst wejściowy.")
+                    return
+            else:
+                url = self.url_var.get().strip()
+                if not url:
+                    messagebox.showerror("Błąd", "Proszę podać URL artykułu.")
+                    return
+                scraped = scrape_text_from_url(url)
+                # ujednolicenie: jeśli zwrócono krotkę/listę -> złącz elementy tekstowe
+                if isinstance(scraped, (list, tuple)):
+                    text = " ".join([s for s in scraped if s])
+                else:
+                    text = scraped or ""
+
             summary = get_summary(text, max_length)
 
             self.output_text.delete(1.0, tk.END)
