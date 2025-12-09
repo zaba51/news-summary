@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-
+from scrapper import scrape_text_from_url
 
 try:
     from summarizer import get_summary
@@ -77,7 +77,8 @@ class NewsSummarizerApp:
         self.master.update()
 
         try:
-            summary = get_summary(url, max_length)
+            text = scrape_text_from_url(url)
+            summary = get_summary(text, max_length)
 
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, summary)

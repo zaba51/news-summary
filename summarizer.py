@@ -5,9 +5,10 @@ from scrapper import scrape_text_from_url
 
 
 
-def get_summary(url: str, max_length: int) -> str:
+def get_summary(raw_text: str, max_length: int) -> str:
     try:
-        raw_text = scrape_text_from_url(url)
+        print("Raw_text", raw_text)
+        return raw_text
 
     except ConnectionError as e:
         return f"Błąd połączenia: {e}"
