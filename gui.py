@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from scrapper import scrape_text_from_url
+import re
 
 try:
     from summarizer import get_summary
 except ImportError:
-    def get_summary(url, max_length):
+    def get_summary(url, max_length, min_length=200):
         print(f"PLACEHOLDER")
         return "PLACEHOLDER"
 
@@ -19,6 +20,7 @@ class NewsSummarizerApp:
         self.mode_var = tk.StringVar(value="input")  # "input" or "url"
         self.url_var = tk.StringVar()
         self.max_chars_var = tk.StringVar(value="500")
+        self.min_chars_var = tk.StringVar(value="200")  # new default min length
 
         self.create_widgets()
 
@@ -59,11 +61,18 @@ class NewsSummarizerApp:
 
         ttk.Label(config_frame, text="Summary config", anchor='w').pack(fill='x', pady=(0, 2))
 
-        max_chars_label = ttk.Label(config_frame, text="Max characters:", anchor='w')
+        max_chars_label = ttk.Label(config_frame, text="Max characters (will be converted to tokens):", anchor='w')
         max_chars_label.pack(side=tk.LEFT, padx=(0, 5))
 
         max_chars_entry = ttk.Entry(config_frame, textvariable=self.max_chars_var, width=10)
         max_chars_entry.pack(side=tk.LEFT, ipady=2)
+
+        # new min length widgets placed next to max length
+        min_chars_label = ttk.Label(config_frame, text="Min characters (will be converted to tokens):", anchor='w')
+        min_chars_label.pack(side=tk.LEFT, padx=(10, 5))
+
+        min_chars_entry = ttk.Entry(config_frame, textvariable=self.min_chars_var, width=10)
+        min_chars_entry.pack(side=tk.LEFT, ipady=2)
 
         generate_button = ttk.Button(self.master, text="Generate Summary", command=self.generate_summary_action)
         generate_button.pack(pady=10)
@@ -97,6 +106,7 @@ class NewsSummarizerApp:
     def generate_summary_action(self):
         mode = self.mode_var.get()
         max_len_str = self.max_chars_var.get().strip()
+        min_len_str = self.min_chars_var.get().strip()
 
         try:
             max_length = int(max_len_str)
@@ -105,6 +115,18 @@ class NewsSummarizerApp:
                 return
         except ValueError:
             messagebox.showerror("Błąd", "Maksymalna liczba znaków musi być liczbą całkowitą.")
+            return
+
+        try:
+            min_length = int(min_len_str)
+            if min_length <= 0:
+                messagebox.showerror("Błąd", "Minimalna liczba znaków musi być dodatnią liczbą całkowitą.")
+                return
+            if min_length > max_length:
+                messagebox.showerror("Błąd", "Minimalna liczba znaków nie może być większa niż maksymalna.")
+                return
+        except ValueError:
+            messagebox.showerror("Błąd", "Minimalna liczba znaków musi być liczbą całkowitą.")
             return
 
         self.output_text.delete(1.0, tk.END)
@@ -129,7 +151,12 @@ class NewsSummarizerApp:
                 else:
                     text = scraped or ""
 
-            summary = get_summary(text, max_length)
+            token_max = max(10, int(round(max_length / 4)))
+            token_min = max(5, int(round(min_length / 4)))
+            if token_min > token_max:
+                token_min = max(1, token_max // 2)
+
+            summary = get_summary(text, token_max, token_min)
 
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, summary)
