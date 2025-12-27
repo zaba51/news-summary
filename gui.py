@@ -59,21 +59,46 @@ class NewsSummarizerApp:
         config_frame = ttk.Frame(self.master, padding="10")
         config_frame.pack(fill='x', padx=10, pady=5)
 
-        ttk.Label(config_frame, text="Summary config", anchor='w').pack(fill='x', pady=(0, 2))
+        config_frame = ttk.Frame(self.master, padding="10")
+        config_frame.pack(fill='x', padx=10, pady=5)
 
-        max_chars_label = ttk.Label(config_frame, text="Max characters (will be converted to tokens):", anchor='w')
-        max_chars_label.pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(config_frame, text="Summary config", anchor='w').pack(fill='x', pady=(0, 5))
 
-        max_chars_entry = ttk.Entry(config_frame, textvariable=self.max_chars_var, width=10)
-        max_chars_entry.pack(side=tk.LEFT, ipady=2)
+        # Max characters
+        max_frame = ttk.Frame(config_frame)
+        max_frame.pack(fill='x', pady=2)
+        ttk.Label(max_frame, text="Max characters (will be converted to tokens):", anchor='w').pack(side=tk.LEFT)
+        max_chars_entry = ttk.Entry(max_frame, textvariable=self.max_chars_var, width=10)
+        max_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
-        # new min length widgets placed next to max length
-        min_chars_label = ttk.Label(config_frame, text="Min characters (will be converted to tokens):", anchor='w')
-        min_chars_label.pack(side=tk.LEFT, padx=(10, 5))
+        # Min characters
+        min_frame = ttk.Frame(config_frame)
+        min_frame.pack(fill='x', pady=2)
+        ttk.Label(min_frame, text="Min characters (will be converted to tokens):", anchor='w').pack(side=tk.LEFT)
+        min_chars_entry = ttk.Entry(min_frame, textvariable=self.min_chars_var, width=10)
+        min_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
-        min_chars_entry = ttk.Entry(config_frame, textvariable=self.min_chars_var, width=10)
-        min_chars_entry.pack(side=tk.LEFT, ipady=2)
+        # --- w __init__ lub create_widgets po polach max/min ---
+        self.model_var = tk.StringVar(value="facebook/mbart-large-50")
 
+        # Ramka dla wyboru modelu
+        model_frame = ttk.Frame(config_frame)
+        model_frame.pack(fill='x', pady=5)
+
+        ttk.Label(model_frame, text="Choose model:", anchor='w').pack(side=tk.LEFT)
+
+        # Lista przykładowych modeli
+        example_models = [
+            "facebook/mbart-large-50",
+            "google/mt5-small",
+            "t5-small",
+            "facebook/bart-large-cnn"
+        ]
+
+        self.model_combobox = ttk.Combobox(model_frame, textvariable=self.model_var,
+                                        values=example_models, state="readonly", width=30)
+        self.model_combobox.pack(side=tk.LEFT, padx=(5,0))
+        
         generate_button = ttk.Button(self.master, text="Generate Summary", command=self.generate_summary_action)
         generate_button.pack(pady=10)
 
@@ -107,6 +132,7 @@ class NewsSummarizerApp:
         mode = self.mode_var.get()
         max_len_str = self.max_chars_var.get().strip()
         min_len_str = self.min_chars_var.get().strip()
+        selected_model = self.model_var.get()
 
         try:
             max_length = int(max_len_str)
@@ -156,7 +182,7 @@ class NewsSummarizerApp:
             if token_min > token_max:
                 token_min = max(1, token_max // 2)
 
-            summary = get_summary(text, token_max, token_min)
+            summary = get_summary(text, selected_model, token_max, token_min)
 
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, summary)

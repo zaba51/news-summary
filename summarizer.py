@@ -1,27 +1,46 @@
 from scrapper import scrape_text_from_url
-from transformers import pipeline, MBartForConditionalGeneration, MBart50TokenizerFast
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import re
+import os
 
-model_name = "facebook/mbart-large-50"
-# model_name = "google/mt5-small"
+# model_name = "facebook/mbart-large-50"
 
-# cache the pipeline to avoid repeated initialisation
-_CACHED_SUMMARIZER = None
-
-def _get_pipeline():
-    global _CACHED_SUMMARIZER
+def _get_pipeline(model_name):
+    local_model_dir = os.path.join("models", model_name.replace("/", "_"))
+    
+    _CACHED_SUMMARIZER = None
     if _CACHED_SUMMARIZER is None:
         try:
-            _CACHED_SUMMARIZER = pipeline("summarization", model=model_name, tokenizer=model_name)
+            if not os.path.exists(local_model_dir):
+                print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
+                model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                os.makedirs(local_model_dir, exist_ok=True)
+                model.save_pretrained(local_model_dir)
+                tokenizer.save_pretrained(local_model_dir)
+            else:
+                print(f"Ładuję model lokalnie z {local_model_dir}...")
+                model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
+                tokenizer = AutoTokenizer.from_pretrained(local_model_dir)
+
+            _CACHED_SUMMARIZER = pipeline("summarization", model=model, tokenizer=tokenizer)
         except Exception as e:
             raise
     return _CACHED_SUMMARIZER
 
-def get_summary(raw_text, max_length: int, min_length: int = 200) -> str:
+
+def sanitize_text(text: str) -> str:
+    # basic sanitization: remove urls/emails and collapse repeated domains/words
+    text = re.sub(r'https?://\S+|www\.\S+', ' ', text)         # remove urls
+    text = re.sub(r'\S+@\S+', ' ', text)                      # remove emails
+    text = re.sub(r'(\b[\w\-.]+(?:\.[a-z]{2,})(?:\.[a-z]{2,})*\b)(?:\s+\1)+', r'\1', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', text)
+    text = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', text, flags=re.IGNORECASE)
+    text = ' '.join(text.split())
+    return text
+
+def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 200) -> str:
     try:
-        print("="*80)
-        print(raw_text)
-        print("="*80)
         # normalizacja wejścia
         if isinstance(raw_text, (list, tuple)):
             raw_text = " ".join([str(x) for x in raw_text if x])
@@ -29,33 +48,19 @@ def get_summary(raw_text, max_length: int, min_length: int = 200) -> str:
         if not raw_text:
             return "Brak tekstu do streszczenia."
 
-        # basic sanitization: remove urls/emails and collapse repeated domains/words
-        text = raw_text
-        text = re.sub(r'https?://\S+|www\.\S+', ' ', text)         # remove urls
-        text = re.sub(r'\S+@\S+', ' ', text)                      # remove emails
-        # collapse repeated domain-like tokens: example.com example.com -> example.com
-        text = re.sub(r'(\b[\w\-.]+(?:\.[a-z]{2,})(?:\.[a-z]{2,})*\b)(?:\s+\1)+', r'\1', text, flags=re.IGNORECASE)
-        # collapse repeated word pairs/triples like "A B A B A B..." -> "A B"
-        text = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', text)
-        # collapse repeated single word occurrences longer than 2 -> single
-        text = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', text, flags=re.IGNORECASE)
-        text = ' '.join(text.split())
+        text = sanitize_text(raw_text)
 
         try:
-            summarizer = _get_pipeline()
+            summarizer = _get_pipeline(model_name)
         except Exception as e:
             return f"Błąd inicjalizacji modelu summarization ({model_name}): {e}"
 
-        # konwersja max/min characters -> przybliżone tokeny (heurystyka)
         target_max_tokens = max(50, int(max_length / 4))
         target_min_tokens = max(10, int(min_length / 4))
         if target_min_tokens >= target_max_tokens:
             target_min_tokens = max(5, target_max_tokens - 1)
 
-        # chunking tekstu na fragmenty ~1000 znaków
         max_chunk_chars = 1000
-        # use sanitized 'text' for chunking
-        text = text
         chunks = []
         while text:
             if len(text) <= max_chunk_chars:
@@ -70,7 +75,6 @@ def get_summary(raw_text, max_length: int, min_length: int = 200) -> str:
             chunks.append(chunk.strip())
             text = text[len(chunk):].strip()
 
-        # Use token-aware generation kwargs; avoid both max_length and max_new_tokens together.
         gen_kwargs = {
             "max_new_tokens": int(target_max_tokens),
             "min_length": int(target_min_tokens),
@@ -114,7 +118,6 @@ def get_summary(raw_text, max_length: int, min_length: int = 200) -> str:
         else:
             result = combined
 
-        # final cleanup: collapse accidental repeated short sequences in model output
         result = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', result)
         result = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', result, flags=re.IGNORECASE)
         if len(result) > max_length:
