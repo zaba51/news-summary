@@ -3,36 +3,30 @@ from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import re
 import os
 
-# model_name = "facebook/mbart-large-50"
-
 def _get_pipeline(model_name):
     local_model_dir = os.path.join("models", model_name.replace("/", "_"))
     
-    _CACHED_SUMMARIZER = None
-    if _CACHED_SUMMARIZER is None:
-        try:
-            if not os.path.exists(local_model_dir):
-                print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
-                model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-                tokenizer = AutoTokenizer.from_pretrained(model_name)
-                os.makedirs(local_model_dir, exist_ok=True)
-                model.save_pretrained(local_model_dir)
-                tokenizer.save_pretrained(local_model_dir)
-            else:
-                print(f"Ładuję model lokalnie z {local_model_dir}...")
-                model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
-                tokenizer = AutoTokenizer.from_pretrained(local_model_dir)
+    try:
+        if not os.path.exists(local_model_dir):
+            print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
+            model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            os.makedirs(local_model_dir, exist_ok=True)
+            model.save_pretrained(local_model_dir)
+            tokenizer.save_pretrained(local_model_dir)
+        else:
+            print(f"Ładuję model lokalnie z {local_model_dir}...")
+            model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
+            tokenizer = AutoTokenizer.from_pretrained(local_model_dir)
 
-            _CACHED_SUMMARIZER = pipeline("summarization", model=model, tokenizer=tokenizer)
-        except Exception as e:
-            raise
-    return _CACHED_SUMMARIZER
+        return pipeline("summarization", model=model, tokenizer=tokenizer)
+    except Exception as e:
+        raise
 
 
 def sanitize_text(text: str) -> str:
-    # basic sanitization: remove urls/emails and collapse repeated domains/words
-    text = re.sub(r'https?://\S+|www\.\S+', ' ', text)         # remove urls
-    text = re.sub(r'\S+@\S+', ' ', text)                      # remove emails
+    text = re.sub(r'https?://\S+|www\.\S+', ' ', text)
+    text = re.sub(r'\S+@\S+', ' ', text)
     text = re.sub(r'(\b[\w\-.]+(?:\.[a-z]{2,})(?:\.[a-z]{2,})*\b)(?:\s+\1)+', r'\1', text, flags=re.IGNORECASE)
     text = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', text)
     text = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', text, flags=re.IGNORECASE)
@@ -41,7 +35,6 @@ def sanitize_text(text: str) -> str:
 
 def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 200) -> str:
     try:
-        # normalizacja wejścia
         if isinstance(raw_text, (list, tuple)):
             raw_text = " ".join([str(x) for x in raw_text if x])
         raw_text = (raw_text or "").strip()

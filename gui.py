@@ -10,22 +10,20 @@ except ImportError:
         print(f"PLACEHOLDER")
         return "PLACEHOLDER"
 
-
 class NewsSummarizerApp:
     def __init__(self, master):
         self.master = master
         master.title("News Summarizer")
         master.geometry("600x450")
 
-        self.mode_var = tk.StringVar(value="input")  # "input" or "url"
+        self.mode_var = tk.StringVar(value="input")
         self.url_var = tk.StringVar()
         self.max_chars_var = tk.StringVar(value="500")
-        self.min_chars_var = tk.StringVar(value="200")  # new default min length
+        self.min_chars_var = tk.StringVar(value="200")
 
         self.create_widgets()
 
     def create_widgets(self):
-        # mode selection (Input text / Url)
         mode_frame = ttk.Frame(self.master, padding="8")
         mode_frame.pack(fill='x', padx=10, pady=(10, 2))
         ttk.Radiobutton(mode_frame, text="Input text", variable=self.mode_var, value="input",
@@ -33,26 +31,21 @@ class NewsSummarizerApp:
         ttk.Radiobutton(mode_frame, text="Url", variable=self.mode_var, value="url",
                         command=self.update_input_mode).pack(side=tk.LEFT)
 
-        # inputs container placed directly under mode_frame so shown fields stay there
         self.inputs_container = ttk.Frame(self.master)
         self.inputs_container.pack(fill='x', padx=10, pady=5)
 
-        # Input text frame (default visible) - child of inputs_container
         self.input_frame = ttk.Frame(self.inputs_container, padding="10")
         ttk.Label(self.input_frame, text="Input your text", anchor='w').pack(fill='x', pady=(0, 2))
         self.input_text = tk.Text(self.input_frame, height=3, wrap='word')
         self.input_text.pack(fill='x', ipady=3)
 
-        # Url frame (hidden by default) - child of inputs_container
         self.url_frame = ttk.Frame(self.inputs_container, padding="10")
         ttk.Label(self.url_frame, text="Paste your url here:", anchor='w').pack(fill='x', pady=(0, 2))
         self.url_entry = ttk.Entry(self.url_frame, textvariable=self.url_var)
         self.url_entry.pack(fill='x', ipady=5)
 
-        # pack only the active input frame initially inside inputs_container
         self.input_frame.pack(fill='x')
 
-        # remaining UI (config, buttons, output) - reuse existing layout
         button_frame = ttk.Frame(self.master, padding="10")
         button_frame.pack(fill='x', padx=10, pady=5)
 
@@ -78,19 +71,17 @@ class NewsSummarizerApp:
         min_chars_entry = ttk.Entry(min_frame, textvariable=self.min_chars_var, width=10)
         min_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
-        # --- w __init__ lub create_widgets po polach max/min ---
         self.model_var = tk.StringVar(value="facebook/mbart-large-50")
 
-        # Ramka dla wyboru modelu
         model_frame = ttk.Frame(config_frame)
         model_frame.pack(fill='x', pady=5)
 
         ttk.Label(model_frame, text="Choose model:", anchor='w').pack(side=tk.LEFT)
 
-        # Lista przykładowych modeli
         example_models = [
             "facebook/mbart-large-50",
             "google/mt5-small",
+            "csebuetnlp/mT5_multilingual_XLSum",
             "t5-small",
             "facebook/bart-large-cnn"
         ]
@@ -112,7 +103,6 @@ class NewsSummarizerApp:
 
     def update_input_mode(self):
         mode = self.mode_var.get()
-        # switch visible frames inside inputs_container so layout position is stable
         if mode == "input":
             try:
                 self.url_frame.pack_forget()
@@ -171,7 +161,6 @@ class NewsSummarizerApp:
                     messagebox.showerror("Błąd", "Proszę podać URL artykułu.")
                     return
                 scraped = scrape_text_from_url(url)
-                # ujednolicenie: jeśli zwrócono krotkę/listę -> złącz elementy tekstowe
                 if isinstance(scraped, (list, tuple)):
                     text = " ".join([s for s in scraped if s])
                 else:
