@@ -14,12 +14,12 @@ class NewsSummarizerApp:
     def __init__(self, master):
         self.master = master
         master.title("News Summarizer")
-        master.geometry("600x450")
+        master.geometry("600x600")
 
         self.mode_var = tk.StringVar(value="input")
         self.url_var = tk.StringVar()
-        self.max_chars_var = tk.StringVar(value="500")
-        self.min_chars_var = tk.StringVar(value="200")
+        self.max_chars_var = tk.StringVar(value="1000")
+        self.min_chars_var = tk.StringVar(value="800")
 
         self.create_widgets()
 
@@ -71,7 +71,7 @@ class NewsSummarizerApp:
         min_chars_entry = ttk.Entry(min_frame, textvariable=self.min_chars_var, width=10)
         min_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
-        self.model_var = tk.StringVar(value="facebook/mbart-large-50")
+        self.model_var = tk.StringVar(value="airKlizz/mt5-base-wikinewssum-polish")
 
         model_frame = ttk.Frame(config_frame)
         model_frame.pack(fill='x', pady=5)
@@ -79,7 +79,8 @@ class NewsSummarizerApp:
         ttk.Label(model_frame, text="Choose model:", anchor='w').pack(side=tk.LEFT)
 
         example_models = [
-            "facebook/mbart-large-50",
+            'airKlizz/mt5-base-wikinewssum-polish',
+            'z-dickson/bart-large-cnn-climate-change-summarization',
             "google/mt5-small",
             "csebuetnlp/mT5_multilingual_XLSum",
             "t5-small",

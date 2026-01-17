@@ -2,26 +2,83 @@ from scrapper import scrape_text_from_url
 from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import re
 import os
+import torch
 
-def _get_pipeline(model_name):
+device = 0 if torch.cuda.is_available() else -1
+polish_models = ['airKlizz/mt5-base-wikinewssum-polish', 'z-dickson/bart-large-cnn-climate-change-summarization']
+mistal_models = ['csebuetnlp/mT5_multilingual_XLSum']
+
+def load_model(model_name):
     local_model_dir = os.path.join("models", model_name.replace("/", "_"))
-    
-    try:
-        if not os.path.exists(local_model_dir):
-            print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
-            model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            os.makedirs(local_model_dir, exist_ok=True)
-            model.save_pretrained(local_model_dir)
-            tokenizer.save_pretrained(local_model_dir)
-        else:
-            print(f"Ładuję model lokalnie z {local_model_dir}...")
-            model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
-            tokenizer = AutoTokenizer.from_pretrained(local_model_dir)
 
-        return pipeline("summarization", model=model, tokenizer=tokenizer)
-    except Exception as e:
-        raise
+    if not os.path.exists(local_model_dir):
+        print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, fix_mistral_regex=(model_name in mistal_models))
+        os.makedirs(local_model_dir, exist_ok=True)
+        model.save_pretrained(local_model_dir)
+        tokenizer.save_pretrained(local_model_dir)
+    else:
+        print(f"Ładuję model lokalnie z {local_model_dir}...")
+        model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
+        tokenizer = AutoTokenizer.from_pretrained(local_model_dir, fix_mistral_regex=(model_name in mistal_models))
+
+    return model, tokenizer
+
+def translation_pipeline(model_name):
+    translation_model, translation_tokenizer = load_model("facebook/nllb-200-distilled-600M")
+    summary_model, summary_tokenizer = load_model(model_name)
+    
+    pl_en = pipeline(
+        "translation",
+        model=translation_model,
+        tokenizer=translation_tokenizer,
+        src_lang="pol_Latn",
+        tgt_lang="eng_Latn",
+        device=device
+    )
+    en_summarizer = pipeline(
+        "summarization",
+        model=summary_model,
+        tokenizer=summary_tokenizer,
+        device=device
+    )
+    en_pl = pipeline(
+        "translation",
+        model=translation_model,
+        tokenizer=translation_tokenizer,
+        src_lang="eng_Latn",
+        tgt_lang="pol_Latn",
+        device=device
+    )
+
+    def summary(text_pl, **gen_kwargs):
+        print("Input text length:", len(text_pl))
+        input_tokens = len(translation_tokenizer.encode(text_pl))
+        gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
+
+        en_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
+        print(f"Translated to English ({len(en_text)} chars):", en_text[:100], "...")
+        en_summary = en_summarizer(
+            en_text,
+            **gen_kwargs
+        )[0]["summary_text"]
+        print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
+        output_tokens = len(translation_tokenizer.encode(en_summary))
+        gen_kwargs = {"max_length": int(output_tokens * 1.2)}
+
+        pl_summary = en_pl(en_summary, **gen_kwargs)[0]["translation_text"]
+        return [{"summary_text": pl_summary}]
+
+    return summary
+
+
+def get_pipeline(model_name):
+    if model_name in polish_models:
+        model, tokenizer = load_model(model_name)
+        return pipeline("summarization", model=model, tokenizer=tokenizer, device=device)
+    else:
+        return translation_pipeline(model_name)
 
 
 def sanitize_text(text: str) -> str:
@@ -35,25 +92,20 @@ def sanitize_text(text: str) -> str:
 
 def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 200) -> str:
     try:
-        if isinstance(raw_text, (list, tuple)):
-            raw_text = " ".join([str(x) for x in raw_text if x])
         raw_text = (raw_text or "").strip()
         if not raw_text:
             return "Brak tekstu do streszczenia."
 
         text = sanitize_text(raw_text)
-
-        try:
-            summarizer = _get_pipeline(model_name)
-        except Exception as e:
-            return f"Błąd inicjalizacji modelu summarization ({model_name}): {e}"
+        summarizer = get_pipeline(model_name)
 
         target_max_tokens = max(50, int(max_length / 4))
         target_min_tokens = max(10, int(min_length / 4))
+
         if target_min_tokens >= target_max_tokens:
             target_min_tokens = max(5, target_max_tokens - 1)
 
-        max_chunk_chars = 1000
+        max_chunk_chars = 2000
         chunks = []
         while text:
             if len(text) <= max_chunk_chars:
@@ -69,58 +121,58 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             text = text[len(chunk):].strip()
 
         gen_kwargs = {
-            "max_new_tokens": int(target_max_tokens),
-            "min_length": int(target_min_tokens),
-            "do_sample": False,
-            "num_beams": 4,
+            "max_length": 400,
+            "min_length": 150,
+            # "do_sample": False,
+            # "num_beams": 4,
+            # "no_repeat_ngram_size": 3,
+            # "early_stopping": True,
+            # "repetition_penalty": 2.0,
+            "do_sample": True,
+            "top_p": 0.9,
+            "temperature": 0.8,
             "no_repeat_ngram_size": 3,
-            "early_stopping": True,
-            "repetition_penalty": 2.0,
         }
 
         prefix = "summarize: " if ("t5" in model_name or "mt5" in model_name) else ""
 
         summaries = []
         for ch in chunks:
-            try:
-                out = summarizer(prefix + ch, **gen_kwargs)
-                if isinstance(out, list) and out and "summary_text" in out[0]:
-                    summaries.append(out[0]["summary_text"].strip())
-                elif isinstance(out, dict) and "generated_text" in out:
-                    summaries.append(out["generated_text"].strip())
-                else:
-                    summaries.append(str(out).strip())
-            except Exception:
-                continue
+            out = summarizer(
+                prefix + ch,
+                **gen_kwargs
+            )
+            summaries.append(out[0]["summary_text"])
 
         if not summaries:
             return "Nie udało się wygenerować streszczenia."
+        
+        for s in summaries:
+            print("Summary chunk:", s)
+
+        # final length
+        gen_kwargs = {
+            "max_length": int(target_max_tokens),
+            "min_length": int(target_min_tokens),
+            # "do_sample": False,
+            # "num_beams": 4,
+            # "no_repeat_ngram_size": 3,
+            # "early_stopping": True,
+            # "repetition_penalty": 2.0,
+            "do_sample": True,
+            "top_p": 0.9,
+            "temperature": 0.8,
+            "no_repeat_ngram_size": 3,
+        }
 
         combined = " ".join(summaries)
-        if len(summaries) > 1:
-            try:
-                final_out = summarizer(prefix + combined, **gen_kwargs)
-                if isinstance(final_out, list) and final_out and "summary_text" in final_out[0]:
-                    result = final_out[0]["summary_text"].strip()
-                elif isinstance(final_out, dict) and "generated_text" in final_out:
-                    result = final_out["generated_text"].strip()
-                else:
-                    result = combined
-            except Exception:
-                result = combined
-        else:
-            result = combined
+        final_out = summarizer(prefix + combined, **gen_kwargs)
+        result = final_out[0]["summary_text"].strip()
 
         result = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', result)
         result = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', result, flags=re.IGNORECASE)
-        if len(result) > max_length:
-            result = result[:max_length].rsplit(" ", 1)[0] + "…"
 
         return result
 
-    except ConnectionError as e:
-        return f"Błąd połączenia: {e}"
-    except ValueError as e:
-        return f"Błąd danych: {e}"
     except Exception as e:
         return f"Nieznany błąd: {e}"
