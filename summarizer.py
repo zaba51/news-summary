@@ -6,7 +6,7 @@ import torch
 
 device = 0 if torch.cuda.is_available() else -1
 polish_models = ['airKlizz/mt5-base-wikinewssum-polish', 'z-dickson/bart-large-cnn-climate-change-summarization']
-mistal_models = ['csebuetnlp/mT5_multilingual_XLSum']
+max_chunk_chars = 1600
 
 def load_model(model_name):
     local_model_dir = os.path.join("models", model_name.replace("/", "_"))
@@ -14,14 +14,14 @@ def load_model(model_name):
     if not os.path.exists(local_model_dir):
         print(f"Model nie znaleziony lokalnie, pobieram {model_name}...")
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        tokenizer = AutoTokenizer.from_pretrained(model_name, fix_mistral_regex=(model_name in mistal_models))
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
         os.makedirs(local_model_dir, exist_ok=True)
         model.save_pretrained(local_model_dir)
         tokenizer.save_pretrained(local_model_dir)
     else:
         print(f"Ładuję model lokalnie z {local_model_dir}...")
         model = AutoModelForSeq2SeqLM.from_pretrained(local_model_dir)
-        tokenizer = AutoTokenizer.from_pretrained(local_model_dir, fix_mistral_regex=(model_name in mistal_models))
+        tokenizer = AutoTokenizer.from_pretrained(local_model_dir)
 
     return model, tokenizer
 
@@ -55,7 +55,8 @@ def translation_pipeline(model_name):
     def summary(text_pl, **gen_kwargs):
         print("Input text length:", len(text_pl))
         input_tokens = len(translation_tokenizer.encode(text_pl))
-        gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
+        # gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
+        gen_kwargs = {"max_length":1024} 
 
         en_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
         print(f"Translated to English ({len(en_text)} chars):", en_text[:100], "...")
@@ -65,7 +66,8 @@ def translation_pipeline(model_name):
         )[0]["summary_text"]
         print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
         output_tokens = len(translation_tokenizer.encode(en_summary))
-        gen_kwargs = {"max_length": int(output_tokens * 1.2)}
+        # gen_kwargs = {"max_length": int(output_tokens * 1.2)}
+        gen_kwargs = {"max_length": 1024}
 
         pl_summary = en_pl(en_summary, **gen_kwargs)[0]["translation_text"]
         return [{"summary_text": pl_summary}]
@@ -105,7 +107,6 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         if target_min_tokens >= target_max_tokens:
             target_min_tokens = max(5, target_max_tokens - 1)
 
-        max_chunk_chars = 2000
         chunks = []
         while text:
             if len(text) <= max_chunk_chars:
@@ -120,18 +121,21 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             chunks.append(chunk.strip())
             text = text[len(chunk):].strip()
 
+        # gen_kwargs = {
+        #     "max_length": 220,
+        #     "min_length": 120,
+        #     "do_sample": True,
+        #     "top_p": 0.9,
+        #     "temperature": 0.8,
+        #     "no_repeat_ngram_size": 3,
+        # }
         gen_kwargs = {
-            "max_length": 400,
-            "min_length": 150,
-            # "do_sample": False,
-            # "num_beams": 4,
-            # "no_repeat_ngram_size": 3,
-            # "early_stopping": True,
-            # "repetition_penalty": 2.0,
+            "max_length": 220,
+            "min_length": 120,
             "do_sample": True,
-            "top_p": 0.9,
-            "temperature": 0.8,
+            "num_beams": 4,
             "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.1,
         }
 
         prefix = "summarize: " if ("t5" in model_name or "mt5" in model_name) else ""
@@ -148,7 +152,7 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             return "Nie udało się wygenerować streszczenia."
         
         for s in summaries:
-            print("Summary chunk:", s)
+            print(f"Summary chunk: {s}\n\n")
 
         # final length
         gen_kwargs = {
@@ -159,9 +163,12 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             # "no_repeat_ngram_size": 3,
             # "early_stopping": True,
             # "repetition_penalty": 2.0,
-            "do_sample": True,
-            "top_p": 0.9,
-            "temperature": 0.8,
+            # "do_sample": False,
+            # "top_p": 0.9,
+            # "temperature": 0.8,
+            # "no_repeat_ngram_size": 3,
+            "do_sample": False,
+            "num_beams": 5,
             "no_repeat_ngram_size": 3,
         }
 

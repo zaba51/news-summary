@@ -4,7 +4,6 @@ import requests
 from scappers import tvpinfo, sportowefakty, generic_scrapper, playwright_scrapper
 
 def scrape_text_from_url(url: str):
-
     return playwright_scrapper.extract_article_text(url)
 
     try:

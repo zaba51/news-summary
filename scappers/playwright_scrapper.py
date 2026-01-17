@@ -10,7 +10,7 @@ def extract_article_text(url: str, timeout=10000) -> str:
 
         page.goto(url, timeout=timeout)
         page.wait_for_load_state("networkidle")
-
+        time.sleep(1)
         try:
             cookie_button_selectors = [
                 'button:has-text("Akceptuj")',
@@ -24,7 +24,7 @@ def extract_article_text(url: str, timeout=10000) -> str:
             for selector in cookie_button_selectors:
                 if page.locator(selector).count() > 0:
                     page.click(selector)
-                    time.sleep(1)  # krótka pauza, żeby popup zniknął
+                    time.sleep(1)
                     break
         except Exception as e:
             print("Nie znaleziono przycisku cookies:", e)       
@@ -32,7 +32,6 @@ def extract_article_text(url: str, timeout=10000) -> str:
         html = page.content()
         browser.close()
 
-    # Reader-mode ekstrakcja
     doc = Document(html)
     article_html = doc.summary()
 

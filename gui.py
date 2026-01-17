@@ -18,8 +18,8 @@ class NewsSummarizerApp:
 
         self.mode_var = tk.StringVar(value="input")
         self.url_var = tk.StringVar()
-        self.max_chars_var = tk.StringVar(value="1000")
-        self.min_chars_var = tk.StringVar(value="800")
+        self.max_chars_var = tk.StringVar(value="2000")
+        self.min_chars_var = tk.StringVar(value="1500")
 
         self.create_widgets()
 
@@ -81,9 +81,7 @@ class NewsSummarizerApp:
         example_models = [
             'airKlizz/mt5-base-wikinewssum-polish',
             'z-dickson/bart-large-cnn-climate-change-summarization',
-            "google/mt5-small",
             "csebuetnlp/mT5_multilingual_XLSum",
-            "t5-small",
             "facebook/bart-large-cnn"
         ]
 
