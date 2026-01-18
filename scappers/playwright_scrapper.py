@@ -8,9 +8,7 @@ def extract_article_text(url: str, timeout=10000) -> str:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
 
-        # page.goto(url, timeout=timeout)
         page.goto(url, timeout=timeout, wait_until="domcontentloaded")
-        # page.on("request", lambda r: print(">>", r.url))
         # page.wait_for_load_state("networkidle")
         print("Page loaded")
         time.sleep(2)

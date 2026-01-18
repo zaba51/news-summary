@@ -21,9 +21,6 @@ def scrape_text_from_content(content: str,
                              lead_class: str = LEAD_CLASS,
                              part_class: str = PART_CLASS,
                              paragraph_class: str = PARAGRAPH_CLASS):
-    """Same behavior as `scrape_text_from_url` but accepts HTML `content` and
-    optional CSS class names to override defaults.
-    """
     soup = BeautifulSoup(content, 'html.parser')
     h1_title = soup.find('h1', class_= title_class).get_text() if soup.find('h1', class_= title_class) else None
     p_lead = soup.find('p', class_=lead_class).get_text() if soup.find('p', class_=lead_class) else 'No lead found'

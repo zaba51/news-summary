@@ -109,12 +109,6 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         text = sanitize_text(raw_text)
         summarizer = get_pipeline(model_name)
 
-        target_max_tokens = max(50, int(max_length / 4))
-        target_min_tokens = max(10, int(min_length / 4))
-
-        if target_min_tokens >= target_max_tokens:
-            target_min_tokens = max(5, target_max_tokens - 1)
-
         chunks = []
         while text:
             if len(text) <= max_chunk_chars:
@@ -129,14 +123,6 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             chunks.append(chunk.strip())
             text = text[len(chunk):].strip()
 
-        # gen_kwargs = {
-        #     "max_length": 220,
-        #     "min_length": 120,
-        #     "do_sample": True,
-        #     "top_p": 0.9,
-        #     "temperature": 0.8,
-        #     "no_repeat_ngram_size": 3,
-        # }
         start_time = time.time()
         gen_kwargs = {
             "max_length": 220,
@@ -163,19 +149,15 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             for s in summaries:
                 print(f"Summary chunk: {s}\n\n")
 
-        # final length
+        target_max_tokens = max(50, int(max_length / 4))
+        target_min_tokens = max(10, int(min_length / 4))
+
+        if target_min_tokens >= target_max_tokens:
+            target_min_tokens = max(5, target_max_tokens - 1)
+            
         gen_kwargs = {
             "max_length": int(target_max_tokens),
             "min_length": int(target_min_tokens),
-            # "do_sample": False,
-            # "num_beams": 4,
-            # "no_repeat_ngram_size": 3,
-            # "early_stopping": True,
-            # "repetition_penalty": 2.0,
-            # "do_sample": False,
-            # "top_p": 0.9,
-            # "temperature": 0.8,
-            # "no_repeat_ngram_size": 3,
             "do_sample": False,
             "num_beams": 5,
             "no_repeat_ngram_size": 3,

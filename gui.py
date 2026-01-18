@@ -2,13 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from scrapper import scrape_text_from_url
 import re
-
-try:
-    from summarizer import get_summary
-except ImportError:
-    def get_summary(url, max_length, min_length=200):
-        print(f"PLACEHOLDER")
-        return "PLACEHOLDER"
+from summarizer import get_summary
 
 class NewsSummarizerApp:
     def __init__(self, master):
