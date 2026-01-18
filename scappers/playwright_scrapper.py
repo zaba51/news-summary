@@ -8,9 +8,12 @@ def extract_article_text(url: str, timeout=10000) -> str:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
 
-        page.goto(url, timeout=timeout)
-        page.wait_for_load_state("networkidle")
-        time.sleep(1)
+        # page.goto(url, timeout=timeout)
+        page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+        # page.on("request", lambda r: print(">>", r.url))
+        # page.wait_for_load_state("networkidle")
+        print("Page loaded")
+        time.sleep(2)
         try:
             cookie_button_selectors = [
                 'button:has-text("Akceptuj")',

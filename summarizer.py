@@ -3,10 +3,12 @@ from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import re
 import os
 import torch
+import time
 
 device = 0 if torch.cuda.is_available() else -1
 polish_models = ['airKlizz/mt5-base-wikinewssum-polish', 'z-dickson/bart-large-cnn-climate-change-summarization']
 max_chunk_chars = 1600
+enable_logs = True
 
 def load_model(model_name):
     local_model_dir = os.path.join("models", model_name.replace("/", "_"))
@@ -53,18 +55,22 @@ def translation_pipeline(model_name):
     )
 
     def summary(text_pl, **gen_kwargs):
-        print("Input text length:", len(text_pl))
+        if enable_logs:
+            print("Input text length:", len(text_pl))
         input_tokens = len(translation_tokenizer.encode(text_pl))
         # gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
         gen_kwargs = {"max_length":1024} 
 
         en_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
-        print(f"Translated to English ({len(en_text)} chars):", en_text[:100], "...")
+
+        if enable_logs:
+            print(f"Translated to English ({len(en_text)} chars):", en_text[:100], "...")
         en_summary = en_summarizer(
             en_text,
             **gen_kwargs
         )[0]["summary_text"]
-        print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
+        if enable_logs:
+            print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
         output_tokens = len(translation_tokenizer.encode(en_summary))
         # gen_kwargs = {"max_length": int(output_tokens * 1.2)}
         gen_kwargs = {"max_length": 1024}
@@ -98,6 +104,8 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         if not raw_text:
             return "Brak tekstu do streszczenia."
 
+        print("Długość tekstu wejściowego (znaki):", len(raw_text))
+
         text = sanitize_text(raw_text)
         summarizer = get_pipeline(model_name)
 
@@ -129,6 +137,7 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         #     "temperature": 0.8,
         #     "no_repeat_ngram_size": 3,
         # }
+        start_time = time.time()
         gen_kwargs = {
             "max_length": 220,
             "min_length": 120,
@@ -148,11 +157,11 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             )
             summaries.append(out[0]["summary_text"])
 
-        if not summaries:
+        if not summaries and enable_logs:
             return "Nie udało się wygenerować streszczenia."
-        
-        for s in summaries:
-            print(f"Summary chunk: {s}\n\n")
+        if enable_logs:
+            for s in summaries:
+                print(f"Summary chunk: {s}\n\n")
 
         # final length
         gen_kwargs = {
@@ -178,6 +187,9 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
 
         result = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', result)
         result = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', result, flags=re.IGNORECASE)
+
+        elapsed = time.time() - start_time
+        print(f"Czas od chunkowania do końca funkcji: {elapsed:.2f} s")
 
         return result
 

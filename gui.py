@@ -13,7 +13,7 @@ except ImportError:
 class NewsSummarizerApp:
     def __init__(self, master):
         self.master = master
-        master.title("News Summarizer")
+        master.title("Podsumowawanie wiadomości")
         master.geometry("600x600")
 
         self.mode_var = tk.StringVar(value="input")
@@ -26,7 +26,7 @@ class NewsSummarizerApp:
     def create_widgets(self):
         mode_frame = ttk.Frame(self.master, padding="8")
         mode_frame.pack(fill='x', padx=10, pady=(10, 2))
-        ttk.Radiobutton(mode_frame, text="Input text", variable=self.mode_var, value="input",
+        ttk.Radiobutton(mode_frame, text="Wprowadź tekst", variable=self.mode_var, value="input",
                         command=self.update_input_mode).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Radiobutton(mode_frame, text="Url", variable=self.mode_var, value="url",
                         command=self.update_input_mode).pack(side=tk.LEFT)
@@ -35,12 +35,12 @@ class NewsSummarizerApp:
         self.inputs_container.pack(fill='x', padx=10, pady=5)
 
         self.input_frame = ttk.Frame(self.inputs_container, padding="10")
-        ttk.Label(self.input_frame, text="Input your text", anchor='w').pack(fill='x', pady=(0, 2))
+        ttk.Label(self.input_frame, text="Wprowadź swój tekst", anchor='w').pack(fill='x', pady=(0, 2))
         self.input_text = tk.Text(self.input_frame, height=3, wrap='word')
         self.input_text.pack(fill='x', ipady=3)
 
         self.url_frame = ttk.Frame(self.inputs_container, padding="10")
-        ttk.Label(self.url_frame, text="Paste your url here:", anchor='w').pack(fill='x', pady=(0, 2))
+        ttk.Label(self.url_frame, text="Wklej swój url:", anchor='w').pack(fill='x', pady=(0, 2))
         self.url_entry = ttk.Entry(self.url_frame, textvariable=self.url_var)
         self.url_entry.pack(fill='x', ipady=5)
 
@@ -55,19 +55,19 @@ class NewsSummarizerApp:
         config_frame = ttk.Frame(self.master, padding="10")
         config_frame.pack(fill='x', padx=10, pady=5)
 
-        ttk.Label(config_frame, text="Summary config", anchor='w').pack(fill='x', pady=(0, 5))
+        ttk.Label(config_frame, text="Konfiguracja", anchor='w').pack(fill='x', pady=(0, 5))
 
         # Max characters
         max_frame = ttk.Frame(config_frame)
         max_frame.pack(fill='x', pady=2)
-        ttk.Label(max_frame, text="Max characters (will be converted to tokens):", anchor='w').pack(side=tk.LEFT)
+        ttk.Label(max_frame, text="Maksymalna liczba znaków (przybliżona):", anchor='w').pack(side=tk.LEFT)
         max_chars_entry = ttk.Entry(max_frame, textvariable=self.max_chars_var, width=10)
         max_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
         # Min characters
         min_frame = ttk.Frame(config_frame)
         min_frame.pack(fill='x', pady=2)
-        ttk.Label(min_frame, text="Min characters (will be converted to tokens):", anchor='w').pack(side=tk.LEFT)
+        ttk.Label(min_frame, text="Minimalna liczba znaków (przybliżona):", anchor='w').pack(side=tk.LEFT)
         min_chars_entry = ttk.Entry(min_frame, textvariable=self.min_chars_var, width=10)
         min_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
@@ -76,7 +76,7 @@ class NewsSummarizerApp:
         model_frame = ttk.Frame(config_frame)
         model_frame.pack(fill='x', pady=5)
 
-        ttk.Label(model_frame, text="Choose model:", anchor='w').pack(side=tk.LEFT)
+        ttk.Label(model_frame, text="Wybierz model:", anchor='w').pack(side=tk.LEFT)
 
         example_models = [
             'airKlizz/mt5-base-wikinewssum-polish',
@@ -88,14 +88,14 @@ class NewsSummarizerApp:
         self.model_combobox = ttk.Combobox(model_frame, textvariable=self.model_var,
                                         values=example_models, state="readonly", width=30)
         self.model_combobox.pack(side=tk.LEFT, padx=(5,0))
-        
-        generate_button = ttk.Button(self.master, text="Generate Summary", command=self.generate_summary_action)
+
+        generate_button = ttk.Button(self.master, text="Generuj podsumowanie", command=self.generate_summary_action)
         generate_button.pack(pady=10)
 
         output_frame = ttk.Frame(self.master, padding="10")
         output_frame.pack(fill='both', expand=True, padx=10, pady=5)
 
-        ttk.Label(output_frame, text="Output:", anchor='w').pack(fill='x', pady=(0, 2))
+        ttk.Label(output_frame, text="Wynik:", anchor='w').pack(fill='x', pady=(0, 2))
 
         self.output_text = tk.Text(output_frame, height=10, wrap='word')
         self.output_text.pack(fill='both', expand=True, ipady=5)
