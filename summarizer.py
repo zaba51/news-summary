@@ -6,7 +6,8 @@ import torch
 import time
 
 device = 0 if torch.cuda.is_available() else -1
-polish_models = ['airKlizz/mt5-base-wikinewssum-polish', 'z-dickson/bart-large-cnn-climate-change-summarization']
+polish_models = ['airKlizz/mt5-base-wikinewssum-polish']
+polish_input_models = ['z-dickson/bart-large-cnn-climate-change-summarization']
 max_chunk_chars = 1600
 enable_logs = True
 
@@ -27,7 +28,7 @@ def load_model(model_name):
 
     return model, tokenizer
 
-def translation_pipeline(model_name):
+def translation_pipeline(model_name, input_lang="en"):
     translation_model, translation_tokenizer = load_model("facebook/nllb-200-distilled-600M")
     summary_model, summary_tokenizer = load_model(model_name)
     
@@ -61,14 +62,18 @@ def translation_pipeline(model_name):
         # gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
         gen_kwargs = {"max_length":1024} 
 
-        en_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
+        if input_lang=="en":
+            input_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
+            if enable_logs:
+                print(f"Translated to English ({len(input_text)} chars):", input_text[:100], "...")
+        else:
+            input_text = text_pl
 
-        if enable_logs:
-            print(f"Translated to English ({len(en_text)} chars):", en_text[:100], "...")
         en_summary = en_summarizer(
-            en_text,
+            input_text,
             **gen_kwargs
         )[0]["summary_text"]
+
         if enable_logs:
             print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
         output_tokens = len(translation_tokenizer.encode(en_summary))
@@ -86,7 +91,7 @@ def get_pipeline(model_name):
         model, tokenizer = load_model(model_name)
         return pipeline("summarization", model=model, tokenizer=tokenizer, device=device)
     else:
-        return translation_pipeline(model_name)
+        return translation_pipeline(model_name, "pl" if model_name in polish_input_models else "en")
 
 
 def sanitize_text(text: str) -> str:
