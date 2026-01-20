@@ -3,18 +3,20 @@ from readability import Document
 from bs4 import BeautifulSoup
 import time
 
+headless = False
+
 def extract_article_text(url: str, timeout=10000) -> str:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=headless)
         page = browser.new_page()
 
         page.goto(url, timeout=timeout, wait_until="domcontentloaded")
-        # page.wait_for_load_state("networkidle")
         print("Page loaded")
         time.sleep(2)
         try:
             cookie_button_selectors = [
                 'button:has-text("Akceptuj")',
+                'div.tvp-covl__ab',
                 'button:has-text("Accept")',
                 'button:has-text("Przejdź")',
                 'button:has-text("PRZEJDŹ")',

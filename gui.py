@@ -3,6 +3,8 @@ from tkinter import ttk, messagebox
 from scrapper import scrape_text_from_url
 import re
 from summarizer import get_summary
+import csv
+import os
 
 class NewsSummarizerApp:
     def __init__(self, master):
@@ -159,12 +161,15 @@ class NewsSummarizerApp:
                 else:
                     text = scraped or ""
 
-            token_max = max(10, int(round(max_length / 4)))
-            token_min = max(5, int(round(min_length / 4)))
-            if token_min > token_max:
-                token_min = max(1, token_max // 2)
-
-            summary = get_summary(text, selected_model, token_max, token_min)
+            summary, time = get_summary(text, selected_model, max_length, min_length)
+            
+            csv_filename = "summary_log.csv"
+            file_exists = os.path.isfile(csv_filename)
+            with open(csv_filename, mode="a", encoding="utf-8", newline='') as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(["text_length", "model_name", "summary_length", "elapsed_s", "summary_text"])
+                writer.writerow([len(text), selected_model, len(summary), time, summary])
 
             self.output_text.delete(1.0, tk.END)
             self.output_text.insert(tk.END, summary)

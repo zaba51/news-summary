@@ -4,12 +4,14 @@ import re
 import os
 import torch
 import time
+from sentence_transformers import SentenceTransformer, util
+import csv
 
 device = 0 if torch.cuda.is_available() else -1
 polish_models = ['airKlizz/mt5-base-wikinewssum-polish']
 polish_input_models = ['z-dickson/bart-large-cnn-climate-change-summarization']
 max_chunk_chars = 1600
-enable_logs = True
+enable_logs = False
 
 def load_model(model_name):
     local_model_dir = os.path.join("models", model_name.replace("/", "_"))
@@ -56,43 +58,55 @@ def translation_pipeline(model_name, input_lang="en"):
     )
 
     def summary(text_pl, **gen_kwargs):
-        if enable_logs:
-            print("Input text length:", len(text_pl))
         input_tokens = len(translation_tokenizer.encode(text_pl))
-        # gen_kwargs = {"max_length": int(input_tokens * 1.2)} 
-        gen_kwargs = {"max_length":1024} 
+        if enable_logs:
+            print(f"Input text length: {len(text_pl)}, Tokens: {int(input_tokens)}\n")
+        kwargs = {"max_length": int(input_tokens * 1.2)} 
 
         if input_lang=="en":
-            input_text = pl_en(text_pl, **gen_kwargs)[0]["translation_text"]
+            input_text = pl_en(text_pl, **kwargs)[0]["translation_text"]
             if enable_logs:
-                print(f"Translated to English ({len(input_text)} chars):", input_text[:100], "...")
+                input_tokens = len(translation_tokenizer.encode(input_text))
+                print(f"Translated to English ({len(input_text)} chars), Tokens: {int(input_tokens)}:", input_text[:100], "...\n")
         else:
             input_text = text_pl
+
+        input_tokens = len(summary_tokenizer.encode(input_text))
+
+        gen_kwargs = {
+            "max_length": max(50, int(input_tokens * 0.6)),
+            "min_length": max(30, int(input_tokens * 0.4)),
+            "do_sample": False,
+            "num_beams": 4,
+            "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.1,
+            }
 
         en_summary = en_summarizer(
             input_text,
             **gen_kwargs
         )[0]["summary_text"]
 
-        if enable_logs:
-            print(f"English summary ({len(en_summary)} chars):", en_summary[:100], "...")
         output_tokens = len(translation_tokenizer.encode(en_summary))
-        # gen_kwargs = {"max_length": int(output_tokens * 1.2)}
-        gen_kwargs = {"max_length": 1024}
+        if enable_logs:
+            print(f"English summary ({len(en_summary)} chars), Tokens: {int(output_tokens)}:", en_summary[:100], "...\n")
+        kwargs = {"max_length": int(output_tokens * 1.2)}
 
-        pl_summary = en_pl(en_summary, **gen_kwargs)[0]["translation_text"]
+        pl_summary = en_pl(en_summary, **kwargs)[0]["translation_text"]
         return [{"summary_text": pl_summary}]
 
-    return summary
+    return summary, summary_tokenizer
 
 
 def get_pipeline(model_name):
     if model_name in polish_models:
         model, tokenizer = load_model(model_name)
-        return pipeline("summarization", model=model, tokenizer=tokenizer, device=device)
+        return pipeline("summarization", model=model, tokenizer=tokenizer, device=device), tokenizer
     else:
         return translation_pipeline(model_name, "pl" if model_name in polish_input_models else "en")
 
+def count_tokens(tokenizer, text):
+    return len(tokenizer.encode(text, truncation=False))
 
 def sanitize_text(text: str) -> str:
     text = re.sub(r'https?://\S+|www\.\S+', ' ', text)
@@ -112,7 +126,7 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         print("Długość tekstu wejściowego (znaki):", len(raw_text))
 
         text = sanitize_text(raw_text)
-        summarizer = get_pipeline(model_name)
+        summarizer, tokenizer = get_pipeline(model_name)
 
         chunks = []
         while text:
@@ -129,56 +143,97 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
             text = text[len(chunk):].strip()
 
         start_time = time.time()
-        gen_kwargs = {
-            "max_length": 220,
-            "min_length": 120,
-            "do_sample": True,
-            "num_beams": 4,
-            "no_repeat_ngram_size": 3,
-            "repetition_penalty": 1.1,
-        }
-
-        prefix = "summarize: " if ("t5" in model_name or "mt5" in model_name) else ""
+        prefix = ""
 
         summaries = []
         for ch in chunks:
-            out = summarizer(
-                prefix + ch,
-                **gen_kwargs
-            )
+            input_tokens = count_tokens(tokenizer, prefix + ch)
+
+            max_len = max(60, int(input_tokens * 0.6))
+            min_len = max(40, int(input_tokens * 0.4))
+
+            if min_len >= max_len:
+                min_len = max(30, max_len - 10)
+
+            gen_kwargs = {
+                "max_length": max_len,
+                "min_length": min_len,
+                "do_sample": False,
+                "num_beams": 4,
+                "no_repeat_ngram_size": 3,
+                "repetition_penalty": 1.1,
+            }
+
+            out = summarizer(prefix + ch, **gen_kwargs)
             summaries.append(out[0]["summary_text"])
 
-        if not summaries and enable_logs:
-            return "Nie udało się wygenerować streszczenia."
-        if enable_logs:
-            for s in summaries:
-                print(f"Summary chunk: {s}\n\n")
-
-        target_max_tokens = max(50, int(max_length / 4))
-        target_min_tokens = max(10, int(min_length / 4))
-
-        if target_min_tokens >= target_max_tokens:
-            target_min_tokens = max(5, target_max_tokens - 1)
-            
-        gen_kwargs = {
-            "max_length": int(target_max_tokens),
-            "min_length": int(target_min_tokens),
-            "do_sample": False,
-            "num_beams": 5,
-            "no_repeat_ngram_size": 3,
-        }
-
         combined = " ".join(summaries)
-        final_out = summarizer(prefix + combined, **gen_kwargs)
-        result = final_out[0]["summary_text"].strip()
+        combined_len = len(combined)
+
+        elapsed = time.time() - start_time
+
+        if enable_logs:
+            print(f"Długość po ETAPIE 1 (znaki): {combined_len}\n")
+            print(f"Liczba chunków: {len(summaries)}")
+            print(f"Combined summary preview:\n{combined[:300]}...\n")
+
+        if combined_len <= max_length:
+            result = combined.strip()
+
+        else:
+            embed_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+            chunk_embeddings = embed_model.encode(summaries, convert_to_tensor=True)
+            
+            final_chunks = []
+            selected_indices = set()
+            current_len = 0
+
+            # Centroid całego dokumentu
+            doc_embedding = torch.mean(chunk_embeddings, dim=0, keepdim=True)
+
+            # MMR loop
+            for _ in range(len(summaries)):
+                # Chunk z maksymalnym similarity do doc_embedding
+                scores = util.cos_sim(chunk_embeddings, doc_embedding).squeeze(1)
+                for idx in selected_indices:
+                    scores[idx] = -1
+                
+                best_idx = int(scores.argmax())
+                candidate = summaries[best_idx]
+                candidate_len = len(candidate)
+                remaining_space = max_length - current_len
+
+                if current_len + candidate_len > max_length:
+                    cut_pos = candidate.rfind('. ', 0, remaining_space)
+                    if cut_pos == -1:
+                        # Brak kropki, przycinamy do limitu
+                        candidate = candidate[:remaining_space].rstrip()
+                    else:
+                        # Przycinamy do ostatniej kropki
+                        candidate = candidate[:cut_pos + 1].rstrip()
+                    final_chunks.append(candidate)
+                    current_len += len(candidate)
+                    break 
+                
+                final_chunks.append(candidate)
+                selected_indices.add(best_idx)
+                current_len += candidate_len
+
+                if current_len >= min_length:
+                    break
+
+                result = " ".join(final_chunks).strip()
+
+                print(f"Długość po ETAPIE 2 (MMR ranking) (znaki): {len(result)}\n")
+
 
         result = re.sub(r'(\b\w+\b(?:\s+\b\w+\b))(?:\s+\1){2,}', r'\1', result)
         result = re.sub(r'\b(\w+)(?:\s+\1){2,}', r'\1', result, flags=re.IGNORECASE)
 
-        elapsed = time.time() - start_time
         print(f"Czas od chunkowania do końca funkcji: {elapsed:.2f} s")
 
-        return result
+        return result, elapsed
 
     except Exception as e:
         return f"Nieznany błąd: {e}"
