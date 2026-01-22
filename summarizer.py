@@ -175,14 +175,13 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
         if enable_logs:
             print(f"Długość po ETAPIE 1 (znaki): {combined_len}\n")
             print(f"Liczba chunków: {len(summaries)}")
-            print(f"Combined summary preview:\n{combined[:300]}...\n")
+            print(f"Podgląd:\n{combined[:300]}...\n")
 
         if combined_len <= max_length:
             result = combined.strip()
 
         else:
             embed_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
             chunk_embeddings = embed_model.encode(summaries, convert_to_tensor=True)
             
             final_chunks = []
@@ -207,10 +206,8 @@ def get_summary(raw_text, model_name: str, max_length: int, min_length: int = 20
                 if current_len + candidate_len > max_length:
                     cut_pos = candidate.rfind('. ', 0, remaining_space)
                     if cut_pos == -1:
-                        # Brak kropki, przycinamy do limitu
                         candidate = candidate[:remaining_space].rstrip()
                     else:
-                        # Przycinamy do ostatniej kropki
                         candidate = candidate[:cut_pos + 1].rstrip()
                     final_chunks.append(candidate)
                     current_len += len(candidate)

@@ -53,14 +53,12 @@ class NewsSummarizerApp:
 
         ttk.Label(config_frame, text="Konfiguracja", anchor='w').pack(fill='x', pady=(0, 5))
 
-        # Max characters
         max_frame = ttk.Frame(config_frame)
         max_frame.pack(fill='x', pady=2)
         ttk.Label(max_frame, text="Maksymalna liczba znaków (przybliżona):", anchor='w').pack(side=tk.LEFT)
         max_chars_entry = ttk.Entry(max_frame, textvariable=self.max_chars_var, width=10)
         max_chars_entry.pack(side=tk.LEFT, padx=(5,0))
 
-        # Min characters
         min_frame = ttk.Frame(config_frame)
         min_frame.pack(fill='x', pady=2)
         ttk.Label(min_frame, text="Minimalna liczba znaków (przybliżona):", anchor='w').pack(side=tk.LEFT)
